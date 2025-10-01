@@ -70,7 +70,7 @@ window.loadImageFile = function(event)
 		{
 			// heightmapData is globally defined
 			heightmapData = processImage(img);
-			
+
 			/*
 				TODO: using the data in heightmapData, create a triangle mesh
 					heightmapData.data: array holding the actual data, note that 
@@ -79,7 +79,59 @@ window.loadImageFile = function(event)
 					heightmapData.width: width of map (number of columns)
 					heightmapData.height: height of the map (number of rows)
 			*/
-			console.log('loaded image: ' + heightmapData.width + ' x ' + heightmapData.height);
+			// create triangle mesh and send buffers to gpu
+
+			// at each (i, j) position in the heightmap, find the y height value 
+			// from the heightmap by calculating the index into the 1D array
+			// then also calculate the x and z coordinates based on the i, j position
+			var positions = [];
+
+			for (var i = 0; i < heightmapData.width; i++) {
+				for (var j = 0; j < heightmapData.height; j++) {
+					// Get the height value from the heightmap data
+					var heightValue = heightmapData.data[j * heightmapData.width + i];
+
+					// Calculate the x, y, z coordinates for each vertex
+					var x = (i / (heightmapData.width - 1)) * 2 - 1; // Scale to [-1, 1]
+					var y = heightValue; // Height value from the heightmap
+					var z = (j / (heightmapData.height - 1)) * 2 - 1; // Scale to [-1, 1]
+
+					// Store the vertex position
+					positions.push(x, y, z);
+				}
+			}
+
+			// 2 faces for every quad of pixels
+
+			var indices = [];
+
+			for (var i = 0; i < heightmapData.width - 1; i++) {
+				for (var j = 0; j < heightmapData.height - 1; j++) {
+					var topLeft = j * heightmapData.width + i;
+					var topRight = topLeft + 1;
+					var bottomLeft = (j + 1) * heightmapData.width + i;
+					var bottomRight = bottomLeft + 1;
+
+					// First triangle
+					indices.push(topLeft, bottomLeft, topRight);
+
+					// Second triangle
+					indices.push(topRight, bottomLeft, bottomRight);
+				}
+			}
+			vertexCount = indices.length; // Update the global vertex count
+
+			// Create and bind the position buffer
+			var positionBuffer = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array(positions));
+
+			var posAttribLoc = gl.getAttribLocation(program, "position");
+
+			vao = createVAO(gl, posAttribLoc, positionBuffer, null, null, null, null);
+	
+			// Create and bind the vertex buffer
+			var vertexBuffer = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices));
+
+			console.log('loaded image: ' + heightmapData.width + ' x ' + heightmapData.height);			
 
 		};
 		img.onerror = function() 
@@ -148,6 +200,11 @@ function draw()
 	gl.clearColor(0.2, 0.2, 0.2, 1);
 	gl.clear(gl.COLOR_BUFFER_BIT);
 
+	// remember to clear the depth buffer bit too?
+	//
+	//
+	gl.clear(gl.DEPTH_BUFFER_BIT);
+
 	gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 	gl.useProgram(program);
 	
@@ -158,7 +215,7 @@ function draw()
 	gl.bindVertexArray(vao);
 	
 	var primitiveType = gl.TRIANGLES;
-	gl.drawArrays(primitiveType, 0, vertexCount);
+	gl.drawElements(primitiveType, vertexCount, gl.UNSIGNED_SHORT, 0);
 
 	requestAnimationFrame(draw);
 
