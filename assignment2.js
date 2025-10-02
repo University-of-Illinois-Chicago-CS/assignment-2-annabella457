@@ -129,7 +129,7 @@ window.loadImageFile = function(event)
 			vao = createVAO(gl, posAttribLoc, positionBuffer, null, null, null, null);
 	
 			// Create and bind the vertex buffer
-			var vertexBuffer = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices));
+			var indexBuffer = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Int32Array(indices));
 
 			console.log('loaded image: ' + heightmapData.width + ' x ' + heightmapData.height);			
 
@@ -215,7 +215,7 @@ function draw()
 	gl.bindVertexArray(vao);
 	
 	var primitiveType = gl.TRIANGLES;
-	gl.drawElements(primitiveType, vertexCount, gl.UNSIGNED_SHORT, 0);
+	gl.drawElements(primitiveType, vertexCount, gl.UNSIGNED_INT, 0);
 
 	requestAnimationFrame(draw);
 
