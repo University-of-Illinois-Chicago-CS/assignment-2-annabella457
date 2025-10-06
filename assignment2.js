@@ -181,7 +181,18 @@ function draw()
 
 	var modelMatrix = identityMatrix();
 
-	// TODO: set up transformations to the model
+	// TODO: set up transformations to the model based on mouse input
+
+	// Rotate around Y axis using left-click and drag
+	var yrotate = 0;
+
+	// if (leftMouse) {
+	// 	if (isDragging) {
+	// 		yrotate += 0.01; // Adjust rotation speed as needed
+	// 	}
+	// }
+	
+	modelMatrix = multiplyMatrices(modelMatrix, rotateYMatrix(yrotate));
 
 	// setup viewing matrix
 	var eyeToTarget = subtract(target, eye);
@@ -218,7 +229,7 @@ function draw()
 	gl.drawElements(primitiveType, vertexCount, gl.UNSIGNED_INT, 0);
 
 	requestAnimationFrame(draw);
-
+	
 }
 
 function createBox()
