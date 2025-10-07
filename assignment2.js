@@ -9,6 +9,13 @@ var uniformModelViewLoc = null;
 var uniformProjectionLoc = null;
 var heightmapData = null;
 
+var modelScale = 1.0;
+var deltaXMatrix = identityMatrix();
+var deltaYMatrix = identityMatrix();
+var panMatrix = identityMatrix();
+
+var heightScale = 1.0;
+
 function processImage(img)
 {
 	// draw the image into an off-screen canvas
@@ -71,14 +78,6 @@ window.loadImageFile = function(event)
 			// heightmapData is globally defined
 			heightmapData = processImage(img);
 
-			/*
-				TODO: using the data in heightmapData, create a triangle mesh
-					heightmapData.data: array holding the actual data, note that 
-					this is a single dimensional array the stores 2D data in row-major order
-
-					heightmapData.width: width of map (number of columns)
-					heightmapData.height: height of the map (number of rows)
-			*/
 			// create triangle mesh and send buffers to gpu
 
 			// at each (i, j) position in the heightmap, find the y height value 
@@ -86,53 +85,44 @@ window.loadImageFile = function(event)
 			// then also calculate the x and z coordinates based on the i, j position
 			var positions = [];
 
-			for (var i = 0; i < heightmapData.width; i++) {
-				for (var j = 0; j < heightmapData.height; j++) {
-					// Get the height value from the heightmap data
-					var heightValue = heightmapData.data[j * heightmapData.width + i];
+			// duplicate indexes of repeated vertices
+			// simpler to implement than using element_array_buffer
+			for (var i = 0; i < heightmapData.height; i++) {
+				for (var j = 0; j < heightmapData.width; j++) {
+					// top-left triangle
+					var x1 = j / (heightmapData.width + 1) * 2;
+					var y1 = heightmapData.data[i * heightmapData.width + j];
+					var z1 = i / (heightmapData.height + 1) * 2;
+					// top-right triangle
+					var x2 = (j + 1) / (heightmapData.width + 1) * 2;
+					var y2 = heightmapData.data[i * heightmapData.width + (j + 1)];
+					var z2 = i / (heightmapData.height + 1) * 2;
+					// bottom-left triangle
+					var x3 = j / (heightmapData.width + 1) * 2;
+					var y3 = heightmapData.data[(i + 1) * heightmapData.width + j];
+					var z3 = (i + 1) / (heightmapData.height + 1) * 2;
+					// bottom-right triangle
+					var x4 = (j + 1) / (heightmapData.width + 1) * 2;
+					var y4 = heightmapData.data[(i + 1) * heightmapData.width + (j + 1)];
+					var z4 = (i + 1) / (heightmapData.height + 1) * 2;
 
-					// Calculate the x, y, z coordinates for each vertex
-					var x = (i / (heightmapData.width - 1)) * 2 - 1; // Scale to [-1, 1]
-					var y = heightValue; // Height value from the heightmap
-					var z = (j / (heightmapData.height - 1)) * 2 - 1; // Scale to [-1, 1]
-
-					// Store the vertex position
-					positions.push(x, y, z);
+					// first triangle
+					positions.push(x1, y1, z1);
+					positions.push(x3, y3, z3);
+					positions.push(x2, y2, z2);
+					// second triangle
+					positions.push(x2, y2, z2);
+					positions.push(x3, y3, z3);
+					positions.push(x4, y4, z4);
 				}
 			}
-
-			// 2 faces for every quad of pixels
-
-			var indices = [];
-
-			for (var i = 0; i < heightmapData.width - 1; i++) {
-				for (var j = 0; j < heightmapData.height - 1; j++) {
-					var topLeft = j * heightmapData.width + i;
-					var topRight = topLeft + 1;
-					var bottomLeft = (j + 1) * heightmapData.width + i;
-					var bottomRight = bottomLeft + 1;
-
-					// First triangle
-					indices.push(topLeft, bottomLeft, topRight);
-
-					// Second triangle
-					indices.push(topRight, bottomLeft, bottomRight);
-				}
-			}
-			vertexCount = indices.length; // Update the global vertex count
-
+			vertexCount = positions.length / 3;
 			// Create and bind the position buffer
 			var positionBuffer = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array(positions));
 
 			var posAttribLoc = gl.getAttribLocation(program, "position");
 
 			vao = createVAO(gl, posAttribLoc, positionBuffer, null, null, null, null);
-	
-			// Create and bind the vertex buffer
-			var indexBuffer = createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Int32Array(indices));
-
-			console.log('loaded image: ' + heightmapData.width + ' x ' + heightmapData.height);			
-
 		};
 		img.onerror = function() 
 		{
@@ -181,18 +171,17 @@ function draw()
 
 	var modelMatrix = identityMatrix();
 
-	// TODO: set up transformations to the model based on mouse input
+	var heightScaleMatrix = scaleMatrix(1.0, heightScale, 1.0);
+	modelMatrix = multiplyMatrices(modelMatrix, heightScaleMatrix);
 
-	// Rotate around Y axis using left-click and drag
-	var yrotate = 0;
+	// rotate the model with the left click and drag
+	modelMatrix = multiplyMatrices(modelMatrix, deltaYMatrix);
+	modelMatrix = multiplyMatrices(modelMatrix, deltaXMatrix);
+	modelMatrix = multiplyMatrices(modelMatrix, panMatrix);
 
-	// if (leftMouse) {
-	// 	if (isDragging) {
-	// 		yrotate += 0.01; // Adjust rotation speed as needed
-	// 	}
-	// }
+	// zooming in/out
+	modelMatrix = multiplyMatrices(modelMatrix, scaleMatrix(modelScale, modelScale, modelScale));
 	
-	modelMatrix = multiplyMatrices(modelMatrix, rotateYMatrix(yrotate));
 
 	// setup viewing matrix
 	var eyeToTarget = subtract(target, eye);
@@ -212,8 +201,6 @@ function draw()
 	gl.clear(gl.COLOR_BUFFER_BIT);
 
 	// remember to clear the depth buffer bit too?
-	//
-	//
 	gl.clear(gl.DEPTH_BUFFER_BIT);
 
 	gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -226,7 +213,8 @@ function draw()
 	gl.bindVertexArray(vao);
 	
 	var primitiveType = gl.TRIANGLES;
-	gl.drawElements(primitiveType, vertexCount, gl.UNSIGNED_INT, 0);
+	gl.drawArrays(primitiveType, 0, vertexCount);
+	// gl.drawElements(primitiveType, vertexCount, gl.UNSIGNED_INT, 0);
 
 	requestAnimationFrame(draw);
 	
@@ -324,12 +312,13 @@ function addMouseCallback(canvas)
 
 		if (e.deltaY < 0) 
 		{
-			console.log("Scrolled up");
-			// e.g., zoom in
+			modelScale *= 1.1;
+			
 		} else {
-			console.log("Scrolled down");
-			// e.g., zoom out
+			modelScale *= 0.9;
 		}
+
+		modelScale = Math.min(Math.max(0.1, modelScale), 10.0);
 	});
 
 	document.addEventListener("mousemove", function (e) {
@@ -341,7 +330,22 @@ function addMouseCallback(canvas)
 		var deltaY = currentY - startY;
 		console.log('mouse drag by: ' + deltaX + ', ' + deltaY);
 
-		// implement dragging logic
+		if (leftMouse) {
+            // left button: rotate the model
+            var angleX = deltaX / canvas.width * 2 * Math.PI;
+            var angleY = deltaY / canvas.height * 2 * Math.PI;
+
+            deltaXMatrix = rotateYMatrix(angleX);
+            deltaYMatrix = rotateXMatrix(angleY);
+        }
+        else {
+            // right button: pan the model
+            var translateX = deltaX / canvas.width * 2;
+            var translateY = -deltaY / canvas.height * 2;
+
+            panMatrix = translateMatrix(translateX, translateY, 0);
+        }
+
 	});
 
 	document.addEventListener("mouseup", function () {
@@ -351,6 +355,11 @@ function addMouseCallback(canvas)
 	document.addEventListener("mouseleave", () => {
 		isDragging = false;
 	});
+}
+
+function scaleHeight(){
+	var slider = document.getElementById("height");
+	heightScale = parseFloat(slider.value) / 50.0;
 }
 
 function initialize() 
@@ -363,6 +372,9 @@ function initialize()
 
 	// add mouse callbacks
 	addMouseCallback(canvas);
+
+	// height slider event listener
+	document.getElementById("height").addEventListener("input", scaleHeight);
 
 	var box = createBox();
 	vertexCount = box.positions.length / 3;		// vertexCount is global variable used by draw()

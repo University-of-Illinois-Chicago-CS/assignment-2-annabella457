@@ -38,19 +38,6 @@
     <div id="config">
         <table>
             <tr>
-                <td>Y Rotation</td>
-                <td><input id="rotation" type="range" min="0" max="360" value="0">
-                </td>
-            </tr>
-
-            <tr>
-                <td>Zoom</td>
-                <td><input value="0" id="scale" type="range" min="0" max="200" value="0">
-                </td>
-            </tr>
-
-
-            <tr>
                 <td>height</td>
                 <td><input value="50" id="height" type="range" min="0" max="100" value="0">
                 </td>
@@ -59,6 +46,16 @@
             <tr>
                 <td>Load image</td>
                 <td><input type="file" id="fileInput" onchange="loadImageFile(event)">
+                </td>
+            </tr>
+
+            <tr>
+                <td>Projection</td>
+                <td>
+                    <select id="projection" onchange="updateProjection()">
+                        <option value="perspective">Perspective</option>
+                        <option value="orthographic">Orthographic</option>
+                    </select>
                 </td>
             </tr>
 
