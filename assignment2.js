@@ -12,9 +12,14 @@ var heightmapData = null;
 var modelScale = 1.0;
 var deltaXMatrix = identityMatrix();
 var deltaYMatrix = identityMatrix();
-var panMatrix = identityMatrix();
+var projectionMatrix = identityMatrix();
+var projectionOn = true;
 
 var heightScale = 1.0;
+
+var eye = [0, 5, 5];
+var target = [0, 0, 0];
+var upHint1 = [0, 1, 0];
 
 function processImage(img)
 {
@@ -83,28 +88,31 @@ window.loadImageFile = function(event)
 			// at each (i, j) position in the heightmap, find the y height value 
 			// from the heightmap by calculating the index into the 1D array
 			// then also calculate the x and z coordinates based on the i, j position
+			// store all triangles vertexes made in the positions array
 			var positions = [];
+			var width = heightmapData.width;
+			var height = heightmapData.height;
 
 			// duplicate indexes of repeated vertices
 			// simpler to implement than using element_array_buffer
-			for (var i = 0; i < heightmapData.height; i++) {
-				for (var j = 0; j < heightmapData.width; j++) {
+			for (var i = 0; i < height; i++) {
+				for (var j = 0; j < width; j++) {
 					// top-left triangle
-					var x1 = j / (heightmapData.width + 1) * 2;
-					var y1 = heightmapData.data[i * heightmapData.width + j];
-					var z1 = i / (heightmapData.height + 1) * 2;
+					var x1 = j / (width) * 2 - 1;
+					var y1 = heightmapData.data[i * width + j] * 2 - 1;
+					var z1 = i / (height) * 2 - 1;
 					// top-right triangle
-					var x2 = (j + 1) / (heightmapData.width + 1) * 2;
-					var y2 = heightmapData.data[i * heightmapData.width + (j + 1)];
-					var z2 = i / (heightmapData.height + 1) * 2;
+					var x2 = (j + 1) / (width) * 2 - 1;
+					var y2 = heightmapData.data[i * width + (j + 1)] * 2 - 1;
+					var z2 = i / (height) * 2 - 1;
 					// bottom-left triangle
-					var x3 = j / (heightmapData.width + 1) * 2;
-					var y3 = heightmapData.data[(i + 1) * heightmapData.width + j];
-					var z3 = (i + 1) / (heightmapData.height + 1) * 2;
+					var x3 = j / (width) * 2 - 1;
+					var y3 = heightmapData.data[(i + 1) * width + j] * 2 - 1;
+					var z3 = (i + 1) / (height) * 2 - 1;
 					// bottom-right triangle
-					var x4 = (j + 1) / (heightmapData.width + 1) * 2;
-					var y4 = heightmapData.data[(i + 1) * heightmapData.width + (j + 1)];
-					var z4 = (i + 1) / (heightmapData.height + 1) * 2;
+					var x4 = (j + 1) / (width) * 2 - 1;
+					var y4 = heightmapData.data[(i + 1) * width + (j + 1)] * 2 - 1;
+					var z4 = (i + 1) / (height) * 2 - 1;
 
 					// first triangle
 					positions.push(x1, y1, z1);
@@ -117,7 +125,7 @@ window.loadImageFile = function(event)
 				}
 			}
 			vertexCount = positions.length / 3;
-			// Create and bind the position buffer
+			
 			var positionBuffer = createBuffer(gl, gl.ARRAY_BUFFER, new Float32Array(positions));
 
 			var posAttribLoc = gl.getAttribLocation(program, "position");
@@ -149,39 +157,25 @@ function setupViewMatrix(eye, target)
     return view;
 
 }
+
 function draw()
 {
-
-	var fovRadians = 70 * Math.PI / 180;
-	var aspectRatio = +gl.canvas.width / +gl.canvas.height;
-	var nearClip = 0.001;
-	var farClip = 20.0;
-
-	// perspective projection
-	var projectionMatrix = perspectiveMatrix(
-		fovRadians,
-		aspectRatio,
-		nearClip,
-		farClip,
-	);
-
-	// eye and target
-	var eye = [0, 5, 5];
-	var target = [0, 0, 0];
+	// perspective projection or not
+	if (projectionOn == true){
+		updateProjection()
+	}
 
 	var modelMatrix = identityMatrix();
-
-	var heightScaleMatrix = scaleMatrix(1.0, heightScale, 1.0);
-	modelMatrix = multiplyMatrices(modelMatrix, heightScaleMatrix);
-
+	
 	// rotate the model with the left click and drag
-	modelMatrix = multiplyMatrices(modelMatrix, deltaYMatrix);
 	modelMatrix = multiplyMatrices(modelMatrix, deltaXMatrix);
-	modelMatrix = multiplyMatrices(modelMatrix, panMatrix);
-
+	modelMatrix = multiplyMatrices(modelMatrix, deltaYMatrix);
+	
 	// zooming in/out
 	modelMatrix = multiplyMatrices(modelMatrix, scaleMatrix(modelScale, modelScale, modelScale));
-	
+
+	var heightScaleMatrix = multiplyMatrices(identityMatrix(), scaleMatrix(1.0, heightScale, 1.0));
+	modelMatrix = multiplyMatrices(modelMatrix, heightScaleMatrix);
 
 	// setup viewing matrix
 	var eyeToTarget = subtract(target, eye);
@@ -205,17 +199,27 @@ function draw()
 
 	gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 	gl.useProgram(program);
+
+	
 	
 	// update modelview and projection matrices to GPU as uniforms
 	gl.uniformMatrix4fv(uniformModelViewLoc, false, new Float32Array(modelviewMatrix));
 	gl.uniformMatrix4fv(uniformProjectionLoc, false, new Float32Array(projectionMatrix));
 
 	gl.bindVertexArray(vao);
+
+	var checkbox = document.getElementById("wireframe");
 	
 	var primitiveType = gl.TRIANGLES;
-	gl.drawArrays(primitiveType, 0, vertexCount);
-	// gl.drawElements(primitiveType, vertexCount, gl.UNSIGNED_INT, 0);
-
+	
+	if (checkbox.checked){
+		gl.drawArrays(gl.LINES, 0, vertexCount);
+	} else {
+		
+		gl.drawArrays(primitiveType, 0, vertexCount);
+	}
+	
+	
 	requestAnimationFrame(draw);
 	
 }
@@ -339,12 +343,18 @@ function addMouseCallback(canvas)
             deltaYMatrix = rotateXMatrix(angleY);
         }
         else {
-            // right button: pan the model
-            var translateX = deltaX / canvas.width * 2;
-            var translateY = -deltaY / canvas.height * 2;
+            // right button: pan the camera
+			var panSpeed = 0.001;
+			var forward = normalize(subtract(target, eye));
+			var right = normalize(cross(forward, upHint1));
+			var newUp = normalize(cross(right, forward));
 
-            panMatrix = translateMatrix(translateX, translateY, 0);
-        }
+			var moveH = multiplyScalarVector(-deltaX * panSpeed, right);
+			var moveV = multiplyScalarVector(deltaY * panSpeed, newUp);
+
+			eye = add(add(eye, moveH), moveV);
+			target = add(add(target, moveH), moveV);
+		}
 
 	});
 
@@ -362,6 +372,28 @@ function scaleHeight(){
 	heightScale = parseFloat(slider.value) / 50.0;
 }
 
+function updateProjection() {
+    var projectionType = document.getElementById("projection").value;
+
+    if (projectionType === "perspective") {
+        projectionOn = true;
+        var fovRadians = 70 * Math.PI / 180;
+        var nearClip = 0.1;
+        var farClip = 100.0;
+		var aspectRatio = +gl.canvas.width / +gl.canvas.height;
+        projectionMatrix = perspectiveMatrix(fovRadians, aspectRatio, nearClip, farClip);
+    } else if (projectionType === "orthographic") {
+		projectionOn = false;
+        var left = -5.0; 
+        var right = 5.0; 
+        var bottom = -5.0; 
+        var top = 5.0; 
+        var near = 0.1; 
+        var far = 100.0; 
+        projectionMatrix = orthographicMatrix(left, right, bottom, top, near, far);
+    }
+}
+
 function initialize() 
 {
 	var canvas = document.querySelector("#glcanvas");
@@ -375,6 +407,7 @@ function initialize()
 
 	// height slider event listener
 	document.getElementById("height").addEventListener("input", scaleHeight);
+	document.getElementById("projection").addEventListener("change", updateProjection);
 
 	var box = createBox();
 	vertexCount = box.positions.length / 3;		// vertexCount is global variable used by draw()
