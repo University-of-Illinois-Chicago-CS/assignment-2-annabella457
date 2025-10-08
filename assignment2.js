@@ -1,3 +1,23 @@
+// CS 425 Assignment 2: Heightmap Terrain Project
+// 
+// Annabella Bokla
+//
+// Description: This program allows the user to load a heightmap jpeg image
+// Once they load that they should be able to change the height of the model loaded
+// They will also be able to zoom out and in, change projection type, and toggle the wireframe
+//
+//
+
+// Key Bindings: Left click and drag to rotate the model
+// Right click and drag to pan the camera
+// Scroll wheel to zoom in and out
+// Slider to change height of model
+// Dropdown to change projection type
+// Checkbox to toggle wireframe mode
+// File input for jpgs to load heightmap image
+//
+
+
 import vertexShaderSrc from './vertex.glsl.js';
 import fragmentShaderSrc from './fragment.glsl.js'
 
